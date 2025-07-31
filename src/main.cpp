@@ -189,6 +189,14 @@ void loop() {
     bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
+    // ---- onw clean CSV line for Edge Impulse -----------------------
+    Serial.printf("%f,%f,%f,%f,%f,%f\n", accelerometerData.acceleration.x,
+                    accelerometerData.acceleration.y,
+                    accelerometerData.acceleration.z,
+                    angVelocityData.acceleration.x, angVelocityData.acceleration.y,
+                    angVelocityData.acceleration.z);
+    // ----------------------------------------------------------------
+
     // Pass the address of orientationData to findXY
     findXY(orientationData);
 
