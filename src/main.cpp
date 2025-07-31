@@ -92,10 +92,10 @@ void findXY(sensors_event_t data) {
     xPosition = (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
     yPosition = (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
     
-    Serial.print("X Position: ");
-    Serial.println(xPosition);
-    Serial.print("Y Position: ");
-    Serial.println(yPosition);
+    // Serial.print("X Position: ");
+    // Serial.println(xPosition);
+    // Serial.print("Y Position: ");
+    // Serial.println(yPosition);
 }
 
 void offsetXAngle(OSCMessage &msg) {
@@ -104,8 +104,8 @@ void offsetXAngle(OSCMessage &msg) {
         sensors_event_t orientationData;
         bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
         xOffset = orientationData.orientation.x;
-        Serial.print("Heading offset set to: ");
-        Serial.println(xOffset);
+        // Serial.print("Heading offset set to: ");
+        // Serial.println(xOffset);
     }
 }
 
@@ -123,8 +123,8 @@ void checkIncomingOSC() {
             bundle.dispatch("/reCalibrate", offsetXAngle);
         } else{
             OSCErrorCode error = bundle.getError();
-            Serial.print("Error: ");
-            Serial.println(error);
+            // Serial.print("Error: ");
+            // Serial.println(error);
         }
     }
 }
@@ -161,7 +161,7 @@ void setup() {
     //=== init BNO IMU ===
     if (!bno.begin(OPERATION_MODE_IMUPLUS)) {
         /* There was a problem detecting the BNO055 ... check your connections */
-        Serial.println("No BNO055 detected... Check your wiring or I2C ADDR!");
+        // Serial.println("No BNO055 detected... Check your wiring or I2C ADDR!");
         while (1)
         ;
     }
@@ -175,8 +175,7 @@ void setup() {
     zOffset = initialOrientation.orientation.z;
 
 
-    Serial.println("setup completed successfully");
-
+    // Serial.println("setup completed successfully");
 }
 
 void loop() {
@@ -190,6 +189,7 @@ void loop() {
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
     // ---- onw clean CSV line for Edge Impulse -----------------------
+    // accX accY accZ gyroX gyroY gyroZ
     Serial.printf("%f,%f,%f,%f,%f,%f\n", accelerometerData.acceleration.x,
                     accelerometerData.acceleration.y,
                     accelerometerData.acceleration.z,
