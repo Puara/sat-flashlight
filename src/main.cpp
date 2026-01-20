@@ -23,6 +23,8 @@ Adafruit_BNO055 bno = Adafruit_BNO055();
 // If using Arduino.h, include it before including puara.h
 #include "puara.h"
 
+#include "puara/descriptors/projection.h"
+
 #include <iostream>
 
 // Initialize Puara's module manager
@@ -55,6 +57,17 @@ OSCMessage msgPosition;
 // Base address of OSC messages
 std::string baseOSC;
 
+std::string oscIP_1{};
+int oscPort_1{};
+
+puara_gestures::Coord3D rotations;
+
+puara_gestures::Projection2D projection(rotations);
+
+puara_gestures::utils::OffsetValue oVX{ minValue: 0, maxValue: 360 };
+puara_gestures::utils::OffsetValue oVY{ minValue: -180, maxValue: 180 };
+puara_gestures::utils::OffsetValue oVZ{ minValue: -90, maxValue: 90 };
+
 // Offset orientation when calibrating
 float xOffset = 0;
 float yOffset;
@@ -64,7 +77,6 @@ float xPosition;
 float yPosition;
 
 const bool calibrateOffset = true;
-const bool useIP2 = false; // Set to true if you want to send OSC messages to IP2
 
 float offsetValue(float currentValue, float  offsetAmount, float minValue, float maxValue){
     if(calibrateOffset){ // Keep original values if false
@@ -92,13 +104,9 @@ void findXY(sensors_event_t data) {
     xPosition = (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
     yPosition = (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
     
-    Serial.print("X Position: ");
-    Serial.println(xPosition);
-    Serial.print("Y Position: ");
-    Serial.println(yPosition);
 }
 
-void offsetXAngle(OSCMessage &msg) {
+void offsetAngles(OSCMessage &msg) {
     if (msg.getInt(0) == 1) {
         // Recalibrate the heading offset
         sensors_event_t orientationData;
@@ -106,11 +114,12 @@ void offsetXAngle(OSCMessage &msg) {
         xOffset = orientationData.orientation.x;
         Serial.print("Heading offset set to: ");
         Serial.println(xOffset);
+        // yOffset = orientationData.orientation.y;
+        // zOffset = orientationData.orientation.z;
     }
 }
 
 void checkIncomingOSC() {
-    
     OSCBundle bundle;
     
     int size = Udp.parsePacket();
@@ -120,7 +129,7 @@ void checkIncomingOSC() {
         }
         if (!bundle.hasError()) {
             // Offset angle to compensate for drift
-            bundle.dispatch("/reCalibrate", offsetXAngle);
+            bundle.dispatch("/reCalibrate", offsetAngles);
         } else{
             OSCErrorCode error = bundle.getError();
             Serial.print("Error: ");
@@ -142,7 +151,7 @@ void setup() {
     puara.start();
 
     // Start the UDP instances 
-    Udp.begin(puara.LocalPORT());
+    Udp.begin(puara.getVarNumber("localPORT"));
 
     baseOSC = ("/" + puara.dmi_name()).c_str();
     
@@ -174,12 +183,20 @@ void setup() {
     yOffset = initialOrientation.orientation.y;
     zOffset = initialOrientation.orientation.z;
 
+    oVY.offsetAmount = initialOrientation.orientation.y;
+    oVZ.offsetAmount = initialOrientation.orientation.z;
+
+    projection.projectionRadius = 8;
+
 
     Serial.println("setup completed successfully");
 
 }
 
 void loop() {
+
+    oscIP_1 = puara.getVarText("oscIP");
+    oscPort_1 = puara.getVarNumber("oscPORT");
 
     checkIncomingOSC();
 
@@ -189,39 +206,48 @@ void loop() {
     bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
+    rotations.x = oVX.offset(orientationData.orientation.x);
+    rotations.y = oVY.offset(orientationData.orientation.y);
+    rotations.z = oVZ.offset(orientationData.orientation.z);
+
     // Pass the address of orientationData to findXY
     findXY(orientationData);
+    projection.update();
+
+    xPosition = projection.current_value().x;
+    yPosition = projection.current_value().y;
+    Serial.print("X Pos: "); Serial.print(xPosition);
+    Serial.print(" | Y Pos: "); Serial.println(yPosition);
 
     /* 
      * Sending OSC messages.
      * If you're not planning to send messages to both addresses (OSC1 and OSC2),
      * it is recommended to set the address to 0.0.0.0 to avoid cluttering the 
-     * network (WiFiUdp will print an warning message in those cases).
+     * network (WiFiUdp will print a warning message in those cases).
      */
-    if (puara.IP1_ready()) { // set namespace and send OSC message for address 1
     
-        bundle.add(msgOrientation.add((offsetValue(orientationData.orientation.x, xOffset, 0, 360))).add(offsetValue(orientationData.orientation.y, yOffset, -180, 180)).add(offsetValue(orientationData.orientation.z, zOffset, -90, 90)));
-        bundle.add(msgAcceleration.add(accelerometerData.acceleration.x).add(accelerometerData.acceleration.y).add(accelerometerData.acceleration.z));
-        bundle.add(msgGyroscope.add(angVelocityData.acceleration.x).add(angVelocityData.acceleration.y).add(angVelocityData.acceleration.z));
-        bundle.add(msgPosition.add(xPosition).add(yPosition));
-        
-        Udp.beginPacket(puara.IP1().c_str(), puara.PORT1());
-        bundle.send(Udp);
-        Udp.endPacket();
-        
-        if(useIP2){ // Disabled as to not clutter the serial output when IP2 is not used
-            Udp.beginPacket(puara.IP2().c_str(), puara.PORT2());
-            bundle.send(Udp);
-            Udp.endPacket();
-        }
-        
-        // Clear OSC 
-        bundle.empty();
-        msgOrientation.empty();
-        msgAcceleration.empty();
-        msgGyroscope.empty();
-        msgPosition.empty();
-    }
+    
+    bundle.add(msgOrientation.add((offsetValue(orientationData.orientation.x, xOffset, 0, 360))).add(offsetValue(orientationData.orientation.y, yOffset, -180, 180)).add(offsetValue(orientationData.orientation.z, zOffset, -90, 90)));
+    bundle.add(msgAcceleration.add(accelerometerData.acceleration.x).add(accelerometerData.acceleration.y).add(accelerometerData.acceleration.z));
+    bundle.add(msgGyroscope.add(angVelocityData.acceleration.x).add(angVelocityData.acceleration.y).add(angVelocityData.acceleration.z));
+    bundle.add(msgPosition.add(xPosition).add(yPosition));
+    
+    Udp.beginPacket(oscIP_1.c_str(), oscPort_1);
+    bundle.send(Udp);
+    Udp.endPacket();
+    
+    
+    // Udp.beginPacket(puara.IP2().c_str(), puara.PORT2());
+    // bundle.send(Udp);
+    // Udp.endPacket();
+    
+    
+    // Clear OSC 
+    bundle.empty();
+    msgOrientation.empty();
+    msgAcceleration.empty();
+    msgGyroscope.empty();
+    msgPosition.empty();
 
     /* Display the floating point orientation data and IP address */
     canvas.fillScreen(ST77XX_BLACK);
@@ -240,7 +266,7 @@ void loop() {
 
     canvas.setTextColor(ST77XX_GREEN);
     canvas.print("\nIP: ");
-    canvas.print(puara.staIP().c_str());
+    //canvas.print(puara.staIP().c_str());
 
     canvas.setTextColor(ST77XX_YELLOW);
     canvas.print("\nOffsetXYZ: ");
@@ -249,6 +275,12 @@ void loop() {
     canvas.print(yOffset);
     canvas.print(", ");
     canvas.print(zOffset);
+
+    canvas.setTextColor(ST77XX_ORANGE);
+    canvas.print("\nPosXY: ");
+    canvas.print(xPosition, 4);
+    canvas.print(", ");
+    canvas.print(yPosition, 4);
     
     tft.drawRGBBitmap(0, 0, canvas.getBuffer(), 240, 135);
     
