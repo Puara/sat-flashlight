@@ -53,6 +53,7 @@ OSCMessage msgOrientation;
 OSCMessage msgAcceleration;
 OSCMessage msgGyroscope;
 OSCMessage msgPosition;
+OSCMessage msgOldPos;
 
 // Base address of OSC messages
 std::string baseOSC;
@@ -75,6 +76,9 @@ float zOffset;
 
 float xPosition;
 float yPosition;
+
+float xCalc;
+float yCalc;
 
 const bool calibrateOffset = true;
 
@@ -101,8 +105,8 @@ void findXY(sensors_event_t data) {
     // Convert angles to radians and find X and Y positions
     float x = sin(yAngle*PI/180);
     float y = sin(zAngle*PI/180);
-    xPosition = (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
-    yPosition = (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
+    xCalc = (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
+    yCalc = (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
     
 }
 
@@ -160,6 +164,7 @@ void setup() {
     msgAcceleration.setAddress((baseOSC + "/Acceleration").c_str());
     msgGyroscope.setAddress((baseOSC + "/Gyroscope").c_str());
     msgPosition.setAddress((baseOSC + "/Position").c_str());
+    msgOldPos.setAddress((baseOSC + "/CalcPosition").c_str());
 
     //=== turn on and init the tft screen ===
     pinMode(TFT_BACKLITE, OUTPUT);
@@ -216,8 +221,6 @@ void loop() {
 
     xPosition = projection.current_value().x;
     yPosition = projection.current_value().y;
-    Serial.print("X Pos: "); Serial.print(xPosition);
-    Serial.print(" | Y Pos: "); Serial.println(yPosition);
 
     /* 
      * Sending OSC messages.
@@ -227,10 +230,11 @@ void loop() {
      */
     
     
-    bundle.add(msgOrientation.add((offsetValue(orientationData.orientation.x, xOffset, 0, 360))).add(offsetValue(orientationData.orientation.y, yOffset, -180, 180)).add(offsetValue(orientationData.orientation.z, zOffset, -90, 90)));
+    bundle.add(msgOrientation.add(rotations.x).add(rotations.y).add(rotations.z));
     bundle.add(msgAcceleration.add(accelerometerData.acceleration.x).add(accelerometerData.acceleration.y).add(accelerometerData.acceleration.z));
     bundle.add(msgGyroscope.add(angVelocityData.acceleration.x).add(angVelocityData.acceleration.y).add(angVelocityData.acceleration.z));
     bundle.add(msgPosition.add(xPosition).add(yPosition));
+    bundle.add(msgOldPos.add(xCalc).add(yCalc));
     
     Udp.beginPacket(oscIP_1.c_str(), oscPort_1);
     bundle.send(Udp);
@@ -248,6 +252,7 @@ void loop() {
     msgAcceleration.empty();
     msgGyroscope.empty();
     msgPosition.empty();
+    msgOldPos.empty();
 
     /* Display the floating point orientation data and IP address */
     canvas.fillScreen(ST77XX_BLACK);
