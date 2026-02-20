@@ -65,9 +65,11 @@ puara_gestures::Coord3D rotations;
 
 puara_gestures::Projection2D projection(rotations);
 
-puara_gestures::utils::OffsetValue oVX{ minValue: 0, maxValue: 360 };
-puara_gestures::utils::OffsetValue oVY{ minValue: -180, maxValue: 180 };
-puara_gestures::utils::OffsetValue oVZ{ minValue: -90, maxValue: 90 };
+float radius = 8;
+
+puara_gestures::utils::OffsetValue offValX{ minValue: 0, maxValue: 360 };
+puara_gestures::utils::OffsetValue offValY{ minValue: -180, maxValue: 180 };
+puara_gestures::utils::OffsetValue offValZ{ minValue: -90, maxValue: 90 };
 
 // Offset orientation when calibrating
 float xOffset = 0;
@@ -96,6 +98,7 @@ float offsetValue(float currentValue, float  offsetAmount, float minValue, float
     
     return currentValue;
 }
+
 void findXY(sensors_event_t data) {
 
     float xAngle = (offsetValue(data.orientation.x, xOffset, 0, 360));
@@ -105,8 +108,8 @@ void findXY(sensors_event_t data) {
     // Convert angles to radians and find X and Y positions
     float x = sin(yAngle*PI/180);
     float y = sin(zAngle*PI/180);
-    xCalc = (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
-    yCalc = (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
+    xCalc = radius * (x * (cos(xAngle*PI/180))) - (y * (sin(xAngle*PI/180)));
+    yCalc = radius * (x * (sin(xAngle*PI/180))) + (y * (cos(xAngle*PI/180)));
     
 }
 
@@ -164,7 +167,7 @@ void setup() {
     msgAcceleration.setAddress((baseOSC + "/Acceleration").c_str());
     msgGyroscope.setAddress((baseOSC + "/Gyroscope").c_str());
     msgPosition.setAddress((baseOSC + "/Position").c_str());
-    msgOldPos.setAddress((baseOSC + "/CalcPosition").c_str());
+    msgOldPos.setAddress((baseOSC + "/CalcPosition").c_str());    
 
     //=== turn on and init the tft screen ===
     pinMode(TFT_BACKLITE, OUTPUT);
@@ -188,8 +191,8 @@ void setup() {
     yOffset = initialOrientation.orientation.y;
     zOffset = initialOrientation.orientation.z;
 
-    oVY.offsetAmount = initialOrientation.orientation.y;
-    oVZ.offsetAmount = initialOrientation.orientation.z;
+    offValY.offsetAmount = initialOrientation.orientation.y;
+    offValZ.offsetAmount = initialOrientation.orientation.z;
 
     projection.projectionRadius = 8;
 
@@ -211,11 +214,13 @@ void loop() {
     bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
-    rotations.x = oVX.offset(orientationData.orientation.x);
-    rotations.y = oVY.offset(orientationData.orientation.y);
-    rotations.z = oVZ.offset(orientationData.orientation.z);
+    rotations.x = offValX.offset(orientationData.orientation.x);
+    rotations.y = offValY.offset(orientationData.orientation.y);
+    rotations.z = offValZ.offset(orientationData.orientation.z);
 
     // Pass the address of orientationData to findXY
+
+    
     findXY(orientationData);
     projection.update();
 
