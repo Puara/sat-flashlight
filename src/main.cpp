@@ -56,6 +56,9 @@ OSCMessage msgGyroscope;
 // Base address of OSC messages
 std::string baseOSC;
 
+std::string oscIP_1{};
+int oscPort_1{};
+
 // Offset orientation when calibrating
 float yOffset;
 float zOffset;
@@ -151,7 +154,7 @@ void setup() {
     puara.start();
 
     // Start the UDP instances 
-    Udp.begin(puara.LocalPORT());
+    Udp.begin(puara.getVarNumber("localPORT"));
 
     baseOSC = ("/" + puara.dmi_name()).c_str();
     
@@ -224,6 +227,9 @@ void setup() {
 
 void loop() {
 
+    oscIP_1 = puara.getVarText("oscIP");
+    oscPort_1 = puara.getVarNumber("oscPort");
+
     /* Get a new event per sensor */
     sensors_event_t orientationData, /* angVelocityData, */ accelerometerData, magneticData;
     bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
@@ -249,18 +255,14 @@ void loop() {
      * it is recommended to set the address to 0.0.0.0 to avoid cluttering the 
      * network (WiFiUdp will print an warning message in those cases).
      */
-    if (puara.IP1_ready()) { // set namespace and send OSC message for address 1
+    
     
         //bundle.add(msgOrientation.add(orientationData.orientation.x).add(offsetValue(orientationData.orientation.y, yOffset, -180, 180)).add(offsetValue(orientationData.orientation.z, zOffset, -90, 90)));
         bundle.add(msgOrientation).add(magneticData.magnetic.x).add(magneticData.magnetic.y).add(magneticData.magnetic.z);
         bundle.add(msgAcceleration.add(accelerometerData.acceleration.x).add(accelerometerData.acceleration.y).add(accelerometerData.acceleration.z));
         // bundle.add(msgGyroscope.add(angVelocityData.acceleration.x).add(angVelocityData.acceleration.y).add(angVelocityData.acceleration.z)); // Commented out gyroscope OSC message
         
-        Udp.beginPacket(puara.IP1().c_str(), puara.PORT1());
-        bundle.send(Udp);
-        Udp.endPacket();
-
-        Udp.beginPacket(puara.IP2().c_str(), puara.PORT2());
+        Udp.beginPacket(oscIP_1.c_str(), oscPort_1);
         bundle.send(Udp);
         Udp.endPacket();
 
@@ -269,7 +271,6 @@ void loop() {
         msgOrientation.empty();
         msgAcceleration.empty();
         // msgGyroscope.empty(); // Commented out gyroscope message clearing
-    }
 
     /* Display the floating point orientation data and IP address */
     refreshScreen();
